@@ -6,6 +6,8 @@ Some transit maps I made or modified
 
 [**Latest map**](https://raw.githubusercontent.com/ethanc8/chicagoland-transit-maps/trunk/pace-jwalker-modified/latest.png)
 
+[**View all maps online**](https://ethanc8.github.io/chicagoland-transit-maps/pace-jwalker-modified/index.html)
+
 * [Original map from the ReVision report](https://raw.githubusercontent.com/ethanc8/chicagoland-transit-maps/trunk/pace-jwalker-modified/spring-2024.png)
 * [Service changes from 2025-03-02 and 2025-12-07](https://raw.githubusercontent.com/ethanc8/chicagoland-transit-maps/trunk/pace-jwalker-modified/2025-12-07.png)
   * August 2024 service changes:

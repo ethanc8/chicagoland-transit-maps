@@ -1,0 +1,427 @@
+<!-- Written by Claude-4.6-Sonnet -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pace Frequency Maps</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #111827;
+  color: #d1d5db;
+  overflow: hidden;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #1f2937;
+  border-bottom: 1px solid #374151;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+h1 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f9fafb;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background: #374151;
+  flex-shrink: 0;
+}
+
+.group-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.map-buttons {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.map-btn {
+  padding: 4px 11px;
+  border: 1px solid #374151;
+  background: #374151;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.map-btn:hover { background: #4b5563; color: #f3f4f6; border-color: #6b7280; }
+.map-btn.active { background: #2563eb; border-color: #3b82f6; color: #fff; }
+
+.zoom-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ctrl-btn {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 7px;
+  border: 1px solid #374151;
+  background: #374151;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.ctrl-btn:hover { background: #4b5563; color: #f3f4f6; }
+
+#scale-label {
+  font-size: 0.72rem;
+  color: #6b7280;
+  min-width: 38px;
+  text-align: right;
+}
+
+#viewport {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  background: #030712;
+  touch-action: none;
+}
+#viewport.dragging { cursor: grabbing; }
+
+#map-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  user-select: none;
+  -webkit-user-drag: none;
+  max-width: none;
+  display: block;
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+  font-size: 0.85rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#loading.visible { opacity: 1; }
+
+#hint {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  font-size: 0.68rem;
+  color: #374151;
+  pointer-events: none;
+  line-height: 1.6;
+  text-align: right;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Pace Frequency Maps</h1>
+
+  <div class="divider"></div>
+  <span class="group-label">Timeline</span>
+  <div class="map-buttons" id="timeline-btns"></div>
+
+  <div class="divider"></div>
+  <span class="group-label">Revision</span>
+  <div class="map-buttons" id="revision-btns"></div>
+
+  <div class="divider"></div>
+  <div class="zoom-controls">
+    <button class="ctrl-btn" id="btn-zoom-in" title="Zoom in (+ key)">+</button>
+    <button class="ctrl-btn" id="btn-zoom-out" title="Zoom out (− key)">−</button>
+    <button class="ctrl-btn" id="btn-zoom-100" title="Zoom to 100%" style="font-size:0.7rem;padding:0 8px;">100%</button>
+    <button class="ctrl-btn" id="btn-reset" title="Fit to screen (0 key)" style="font-size:0.7rem;padding:0 8px;">Fit</button>
+    <span id="scale-label">100%</span>
+  </div>
+</header>
+
+<div id="viewport">
+  <img id="map-img" src="" alt="Transit map" draggable="false">
+  <div id="loading">Loading…</div>
+  <div id="hint">
+    Scroll to zoom · Drag to pan<br>
+    Keys: +/− zoom · 0 fit · 1–8 switch map
+  </div>
+</div>
+
+<script>
+const TIMELINE = [
+  { file: 'spring-2024.png', label: 'Spring 2024' },
+  { file: '2025-12-07.png',  label: 'Dec 2025'    },
+  { file: '2026-03-15.png',  label: 'Mar 2026'    },
+  { file: '2026-06-01.png',  label: 'Jun 2026'    },
+  { file: 'latest.png',      label: 'Latest'      },
+];
+const REVISION = [
+  { file: 'revision-coverage.png',  label: 'Coverage'  },
+  { file: 'revision-plus10.png',    label: '+10'        },
+  { file: 'revision-ridership.png', label: 'Ridership'  },
+];
+const ALL_MAPS = [...TIMELINE, ...REVISION];
+
+const viewport   = document.getElementById('viewport');
+const img        = document.getElementById('map-img');
+const loading    = document.getElementById('loading');
+const scaleLabel = document.getElementById('scale-label');
+
+let scale = 1, panX = 0, panY = 0;
+let imgW = 0, imgH = 0;
+let needFit = true;
+let activeIndex = 0;
+let allButtons = [];
+
+// ── Transform ─────────────────────────────────────────────────────────────────
+
+function applyTransform() {
+  img.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+  scaleLabel.textContent = Math.round(scale * 100) + '%';
+}
+
+function fitToView() {
+  if (!imgW || !imgH) return;
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  scale = Math.min(vw / imgW, vh / imgH);
+  panX  = (vw - imgW * scale) / 2;
+  panY  = (vh - imgH * scale) / 2;
+  applyTransform();
+}
+
+function zoomAt(factor, cx, cy) {
+  const newScale = Math.max(0.05, Math.min(32, scale * factor));
+  const imgX = (cx - panX) / scale;
+  const imgY = (cy - panY) / scale;
+  scale = newScale;
+  panX  = cx - imgX * scale;
+  panY  = cy - imgY * scale;
+  applyTransform();
+}
+
+// ── Map switching ──────────────────────────────────────────────────────────────
+
+function loadMap(index, keepTransform = true) {
+  if (index < 0 || index >= ALL_MAPS.length) return;
+  activeIndex = index;
+  allButtons.forEach((b, i) => b.classList.toggle('active', i === index));
+  if (!keepTransform) needFit = true;
+  loading.classList.add('visible');
+  img.src = ALL_MAPS[index].file;
+}
+
+img.addEventListener('load', () => {
+  loading.classList.remove('visible');
+  imgW = img.naturalWidth;
+  imgH = img.naturalHeight;
+  if (needFit) { fitToView(); needFit = false; }
+});
+
+img.addEventListener('error', () => loading.classList.remove('visible'));
+
+// ── Build buttons ──────────────────────────────────────────────────────────────
+
+function makeButtons(maps, startIndex, containerId) {
+  const container = document.getElementById(containerId);
+  maps.forEach((m, i) => {
+    const globalIndex = startIndex + i;
+    const btn = document.createElement('button');
+    btn.className = 'map-btn';
+    btn.textContent = m.label;
+    btn.title = `Switch to ${m.label} (key ${globalIndex + 1})`;
+    btn.addEventListener('click', () => loadMap(globalIndex, true));
+    container.appendChild(btn);
+    allButtons.push(btn);
+  });
+}
+
+makeButtons(TIMELINE, 0,              'timeline-btns');
+makeButtons(REVISION, TIMELINE.length, 'revision-btns');
+
+// ── Zoom buttons ───────────────────────────────────────────────────────────────
+
+const vcx = () => viewport.clientWidth  / 2;
+const vcy = () => viewport.clientHeight / 2;
+
+document.getElementById('btn-zoom-in') .addEventListener('click', () => zoomAt(1.3,     vcx(), vcy()));
+document.getElementById('btn-zoom-out').addEventListener('click', () => zoomAt(1 / 1.3, vcx(), vcy()));
+document.getElementById('btn-zoom-100').addEventListener('click', () => {
+  const cx = vcx(), cy = vcy();
+  const imgX = (cx - panX) / scale;
+  const imgY = (cy - panY) / scale;
+  scale = 1;
+  panX = cx - imgX;
+  panY = cy - imgY;
+  applyTransform();
+});
+document.getElementById('btn-reset')   .addEventListener('click', fitToView);
+
+// ── Scroll zoom ────────────────────────────────────────────────────────────────
+
+viewport.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  zoomAt(factor, e.clientX - rect.left, e.clientY - rect.top);
+}, { passive: false });
+
+// ── Pointer drag ───────────────────────────────────────────────────────────────
+
+let dragging = false, dragX0, dragY0, panX0, panY0;
+let activeTouches = 0;
+
+viewport.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch') return; // handled by touch events
+  if (e.button !== 0) return;
+  dragging = true;
+  dragX0 = e.clientX; dragY0 = e.clientY;
+  panX0  = panX;      panY0  = panY;
+  viewport.classList.add('dragging');
+  viewport.setPointerCapture(e.pointerId);
+});
+
+viewport.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  panX = panX0 + (e.clientX - dragX0);
+  panY = panY0 + (e.clientY - dragY0);
+  applyTransform();
+});
+
+viewport.addEventListener('pointerup',    () => { dragging = false; viewport.classList.remove('dragging'); });
+viewport.addEventListener('pointercancel',() => { dragging = false; viewport.classList.remove('dragging'); });
+
+// ── Touch pinch zoom + pan ─────────────────────────────────────────────────────
+
+let t0 = null, t1 = null; // tracked touches
+
+function touchMid(a, b) {
+  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+}
+function touchDist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+viewport.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    t0 = { ...e.touches[0] };
+    panX0 = panX; panY0 = panY;
+  } else if (e.touches.length === 2) {
+    t0 = { ...e.touches[0] };
+    t1 = { ...e.touches[1] };
+    panX0 = panX; panY0 = panY;
+  }
+}, { passive: false });
+
+viewport.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  if (e.touches.length === 1 && t0) {
+    panX = panX0 + (e.touches[0].clientX - t0.clientX);
+    panY = panY0 + (e.touches[0].clientY - t0.clientY);
+    applyTransform();
+  } else if (e.touches.length === 2 && t0 && t1) {
+    const a = e.touches[0], b = e.touches[1];
+    const dist0  = touchDist(t0, t1);
+    const dist1  = touchDist(a,  b);
+    const mid0   = touchMid(t0, t1);
+    const mid1   = touchMid(a,  b);
+    const factor = dist1 / dist0;
+    // Pan from mid-point movement
+    panX = panX0 + (mid1.x - mid0.x);
+    panY = panY0 + (mid1.y - mid0.y);
+    // Zoom toward midpoint
+    const cx = mid0.x - rect.left;
+    const cy = mid0.y - rect.top;
+    const imgX = (cx - panX) / scale;
+    const imgY = (cy - panY) / scale;
+    scale = Math.max(0.05, Math.min(32, scale * factor));
+    panX  = cx - imgX * scale + (mid1.x - mid0.x);
+    panY  = cy - imgY * scale + (mid1.y - mid0.y);
+    // reset reference so next frame is incremental
+    t0 = { ...a }; t1 = { ...b };
+    panX0 = panX; panY0 = panY;
+    applyTransform();
+  }
+}, { passive: false });
+
+viewport.addEventListener('touchend', e => {
+  if (e.touches.length === 0) { t0 = null; t1 = null; }
+  else if (e.touches.length === 1) {
+    t0 = { ...e.touches[0] };
+    t1 = null;
+    panX0 = panX; panY0 = panY;
+  }
+}, { passive: false });
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key) {
+    case '+': case '=': zoomAt(1.2, vcx(), vcy()); break;
+    case '-': case '_': zoomAt(1/1.2, vcx(), vcy()); break;
+    case '0':           fitToView(); break;
+    case 'ArrowLeft':   panX -= 60; applyTransform(); break;
+    case 'ArrowRight':  panX += 60; applyTransform(); break;
+    case 'ArrowUp':     panY -= 60; applyTransform(); break;
+    case 'ArrowDown':   panY += 60; applyTransform(); break;
+    default:
+      const n = parseInt(e.key);
+      if (n >= 1 && n <= ALL_MAPS.length) loadMap(n - 1, true);
+  }
+});
+
+// ── Window resize ──────────────────────────────────────────────────────────────
+
+window.addEventListener('resize', () => { if (needFit) fitToView(); });
+
+// ── Initial load ───────────────────────────────────────────────────────────────
+
+loadMap(4, false); // "Latest" as default
+</script>
+</body>
+</html>
