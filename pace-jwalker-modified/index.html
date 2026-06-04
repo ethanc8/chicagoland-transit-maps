@@ -308,94 +308,78 @@ viewport.addEventListener('wheel', e => {
   zoomAt(factor, e.clientX - rect.left, e.clientY - rect.top);
 }, { passive: false });
 
-// ── Pointer drag ───────────────────────────────────────────────────────────────
+// ── Pointer drag + pinch zoom (mouse, touch, stylus) ──────────────────────────
 
-let dragging = false, dragX0, dragY0, panX0, panY0;
-let activeTouches = 0;
+const pointers = new Map(); // pointerId → {x, y}
+let dragStart  = null;      // {x, y, panX, panY}
+let pinchStart = null;      // {mid, dist, panX, panY, scale}
+
+function pinchMid()  {
+  const [a, b] = [...pointers.values()];
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+function pinchDist() {
+  const [a, b] = [...pointers.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
 
 viewport.addEventListener('pointerdown', e => {
-  if (e.pointerType === 'touch') return; // handled by touch events
-  if (e.button !== 0) return;
-  dragging = true;
-  dragX0 = e.clientX; dragY0 = e.clientY;
-  panX0  = panX;      panY0  = panY;
-  viewport.classList.add('dragging');
+  if (e.button > 0) return;
   viewport.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 1) {
+    dragStart  = { x: e.clientX, y: e.clientY, panX, panY };
+    pinchStart = null;
+    viewport.classList.add('dragging');
+  } else if (pointers.size === 2) {
+    pinchStart = { mid: pinchMid(), dist: pinchDist(), panX, panY, scale };
+    dragStart  = null;
+  }
 });
 
 viewport.addEventListener('pointermove', e => {
-  if (!dragging) return;
-  panX = panX0 + (e.clientX - dragX0);
-  panY = panY0 + (e.clientY - dragY0);
-  applyTransform();
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (pointers.size === 1 && dragStart) {
+    panX = dragStart.panX + (e.clientX - dragStart.x);
+    panY = dragStart.panY + (e.clientY - dragStart.y);
+    applyTransform();
+  } else if (pointers.size === 2 && pinchStart) {
+    const rect     = viewport.getBoundingClientRect();
+    const currDist = pinchDist();
+    const currMid  = pinchMid();
+    const newScale = Math.max(0.05, Math.min(32, pinchStart.scale * (currDist / pinchStart.dist)));
+
+    // Keep pinch midpoint anchored to the same image coordinate
+    const cx   = pinchStart.mid.x - rect.left;
+    const cy   = pinchStart.mid.y - rect.top;
+    const imgX = (cx - pinchStart.panX) / pinchStart.scale;
+    const imgY = (cy - pinchStart.panY) / pinchStart.scale;
+
+    scale = newScale;
+    panX  = (currMid.x - rect.left) - imgX * scale;
+    panY  = (currMid.y - rect.top)  - imgY * scale;
+    applyTransform();
+  }
 });
 
-viewport.addEventListener('pointerup',    () => { dragging = false; viewport.classList.remove('dragging'); });
-viewport.addEventListener('pointercancel',() => { dragging = false; viewport.classList.remove('dragging'); });
-
-// ── Touch pinch zoom + pan ─────────────────────────────────────────────────────
-
-let t0 = null, t1 = null; // tracked touches
-
-function touchMid(a, b) {
-  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+function onPointerEnd(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    dragStart = null; pinchStart = null;
+    viewport.classList.remove('dragging');
+  } else if (pointers.size === 1) {
+    // One finger lifted during pinch — resume single-finger drag
+    const [, pos] = [...pointers.entries()][0];
+    dragStart  = { x: pos.x, y: pos.y, panX, panY };
+    pinchStart = null;
+  }
 }
-function touchDist(a, b) {
-  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-}
 
-viewport.addEventListener('touchstart', e => {
-  e.preventDefault();
-  if (e.touches.length === 1) {
-    t0 = { ...e.touches[0] };
-    panX0 = panX; panY0 = panY;
-  } else if (e.touches.length === 2) {
-    t0 = { ...e.touches[0] };
-    t1 = { ...e.touches[1] };
-    panX0 = panX; panY0 = panY;
-  }
-}, { passive: false });
-
-viewport.addEventListener('touchmove', e => {
-  e.preventDefault();
-  const rect = viewport.getBoundingClientRect();
-  if (e.touches.length === 1 && t0) {
-    panX = panX0 + (e.touches[0].clientX - t0.clientX);
-    panY = panY0 + (e.touches[0].clientY - t0.clientY);
-    applyTransform();
-  } else if (e.touches.length === 2 && t0 && t1) {
-    const a = e.touches[0], b = e.touches[1];
-    const dist0  = touchDist(t0, t1);
-    const dist1  = touchDist(a,  b);
-    const mid0   = touchMid(t0, t1);
-    const mid1   = touchMid(a,  b);
-    const factor = dist1 / dist0;
-    // Pan from mid-point movement
-    panX = panX0 + (mid1.x - mid0.x);
-    panY = panY0 + (mid1.y - mid0.y);
-    // Zoom toward midpoint
-    const cx = mid0.x - rect.left;
-    const cy = mid0.y - rect.top;
-    const imgX = (cx - panX) / scale;
-    const imgY = (cy - panY) / scale;
-    scale = Math.max(0.05, Math.min(32, scale * factor));
-    panX  = cx - imgX * scale + (mid1.x - mid0.x);
-    panY  = cy - imgY * scale + (mid1.y - mid0.y);
-    // reset reference so next frame is incremental
-    t0 = { ...a }; t1 = { ...b };
-    panX0 = panX; panY0 = panY;
-    applyTransform();
-  }
-}, { passive: false });
-
-viewport.addEventListener('touchend', e => {
-  if (e.touches.length === 0) { t0 = null; t1 = null; }
-  else if (e.touches.length === 1) {
-    t0 = { ...e.touches[0] };
-    t1 = null;
-    panX0 = panX; panY0 = panY;
-  }
-}, { passive: false });
+viewport.addEventListener('pointerup',     onPointerEnd);
+viewport.addEventListener('pointercancel', onPointerEnd);
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────────
 
