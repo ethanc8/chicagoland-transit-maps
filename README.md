@@ -39,3 +39,7 @@ Some transit maps I made or modified
   	* **501 Jefferson** (in Joliet) is extended to Caton Farm Road, and one branch was cut bringing 30-minute frequency to the full route
   	* **364 159th St** now every 15 minutes
   	* **290 Touhy** no longer serves Lincolnwood Town Center
+* [Map from the ReVision Draft Plan](https://raw.githubusercontent.com/ethanc8/chicagoland-transit-maps/trunk/pace-jwalker-modified/official-2026.jpg)
+* [Service changes from 2026-11-02](https://raw.githubusercontent.com/ethanc8/chicagoland-transit-maps/trunk/pace-jwalker-modified/2026-11-02.png)
+  * 2026-11-02:
+    * [**808 Crystal Lake-Harvard**](http://web.archive.org/web/20261111191959/https://www.pacebus.com/notice/route-808-service-change) now hourly service with a loop
